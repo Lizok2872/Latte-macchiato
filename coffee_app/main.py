@@ -4,8 +4,8 @@ import sqlite3
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QTableWidgetItem,
                              QHeaderView, QMessageBox, QDialog)
 from PyQt6.QtCore import Qt
-from main_window.ui import Ui_MainWindow
-from coffee_dialog.ui import Ui_Dialog
+from main_window import Ui_MainWindow
+from coffee_dialog import Ui_Dialog
 
 
 class CoffeeEditDialog(QDialog, Ui_Dialog):
