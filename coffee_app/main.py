@@ -13,8 +13,12 @@ class CoffeeEditDialog(QDialog, Ui_Dialog):
         super().__init__(parent)
         self.setupUi(self)
         self.coffee_data = coffee_data
+        
         if coffee_data:
+            self.setWindowTitle("Редактирование записи")
             self.load_data()
+        else:
+            self.setWindowTitle("Добавление записи")
 
     def load_data(self):
         self.nameEdit.setText(self.coffee_data[1])
@@ -26,6 +30,18 @@ class CoffeeEditDialog(QDialog, Ui_Dialog):
 
     def get_data(self):
         try:
+            if not self.nameEdit.text():
+                QMessageBox.warning(self, "Ошибка", "Введите название сорта")
+                return None
+            
+            if not self.priceEdit.text():
+                QMessageBox.warning(self, "Ошибка", "Введите цену")
+                return None
+            
+            if not self.volumeEdit.text():
+                QMessageBox.warning(self, "Ошибка", "Введите объём упаковки")
+                return None
+            
             return {
                 'name': self.nameEdit.text(),
                 'roast_degree': self.roastCombo.currentText(),
@@ -35,7 +51,7 @@ class CoffeeEditDialog(QDialog, Ui_Dialog):
                 'package_volume': int(self.volumeEdit.text())
             }
         except ValueError:
-            QMessageBox.warning(self, "Ошибка", "Проверьте правильность ввода")
+            QMessageBox.warning(self, "Ошибка", "Проверьте правильность ввода числовых значений")
             return None
 
 
@@ -64,10 +80,17 @@ class CoffeeApp(QMainWindow, Ui_MainWindow):
         self.tableWidget.setColumnCount(7)
         self.tableWidget.setHorizontalHeaderLabels([
             "ID", "Название сорта", "Степень обжарки",
-            "Молотый/В зернах", "Описание вкуса", "Цена", "Объём упаковки"
+            "Молотый/В зернах", "Описание вкуса", "Цена (руб)", "Объём (г)"
         ])
         header = self.tableWidget.horizontalHeader()
         header.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
+        
+        self.tableWidget.setColumnWidth(0, 50)
+        self.tableWidget.setColumnWidth(1, 150)
+        self.tableWidget.setColumnWidth(2, 100)
+        self.tableWidget.setColumnWidth(3, 100)
+        self.tableWidget.setColumnWidth(5, 80)
+        self.tableWidget.setColumnWidth(6, 80)
 
     def connect_signals(self):
         self.addButton.clicked.connect(self.add_record)
@@ -116,7 +139,12 @@ class CoffeeApp(QMainWindow, Ui_MainWindow):
         for row_number, row_data in enumerate(rows):
             self.tableWidget.insertRow(row_number)
             for column_number, data in enumerate(row_data):
-                item = QTableWidgetItem(str(data))
+                if column_number == 5:
+                    item = QTableWidgetItem(f"{data:.2f}")
+                elif column_number == 6:
+                    item = QTableWidgetItem(str(data))
+                else:
+                    item = QTableWidgetItem(str(data))
                 self.tableWidget.setItem(row_number, column_number, item)
 
     def add_record(self):
@@ -124,19 +152,23 @@ class CoffeeApp(QMainWindow, Ui_MainWindow):
         if dialog.exec() == QDialog.DialogCode.Accepted:
             data = dialog.get_data()
             if data:
-                cursor = self.conn.cursor()
-                cursor.execute('''
-                    INSERT INTO coffee (name, roast_degree, ground_or_beans, taste_description, price, package_volume)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                ''', (data['name'], data['roast_degree'], data['ground_or_beans'],
-                      data['taste_description'], data['price'], data['package_volume']))
-                self.conn.commit()
-                self.load_data()
+                try:
+                    cursor = self.conn.cursor()
+                    cursor.execute('''
+                        INSERT INTO coffee (name, roast_degree, ground_or_beans, taste_description, price, package_volume)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    ''', (data['name'], data['roast_degree'], data['ground_or_beans'],
+                          data['taste_description'], data['price'], data['package_volume']))
+                    self.conn.commit()
+                    self.load_data()
+                    QMessageBox.information(self, "Успех", "Запись успешно добавлена")
+                except Exception as e:
+                    QMessageBox.critical(self, "Ошибка", f"Не удалось добавить запись: {str(e)}")
 
     def edit_record(self):
         current_row = self.tableWidget.currentRow()
         if current_row < 0:
-            QMessageBox.warning(self, "Предупреждение", "Выберите запись")
+            QMessageBox.warning(self, "Предупреждение", "Выберите запись для редактирования")
             return
         
         record_id = int(self.tableWidget.item(current_row, 0).text())
@@ -149,13 +181,17 @@ class CoffeeApp(QMainWindow, Ui_MainWindow):
             if dialog.exec() == QDialog.DialogCode.Accepted:
                 data = dialog.get_data()
                 if data:
-                    cursor.execute('''
-                        UPDATE coffee SET name=?, roast_degree=?, ground_or_beans=?, 
-                            taste_description=?, price=?, package_volume=? WHERE id=?
-                    ''', (data['name'], data['roast_degree'], data['ground_or_beans'],
-                          data['taste_description'], data['price'], data['package_volume'], record_id))
-                    self.conn.commit()
-                    self.load_data()
+                    try:
+                        cursor.execute('''
+                            UPDATE coffee SET name=?, roast_degree=?, ground_or_beans=?, 
+                                taste_description=?, price=?, package_volume=? WHERE id=?
+                        ''', (data['name'], data['roast_degree'], data['ground_or_beans'],
+                              data['taste_description'], data['price'], data['package_volume'], record_id))
+                        self.conn.commit()
+                        self.load_data()
+                        QMessageBox.information(self, "Успех", "Запись успешно обновлена")
+                    except Exception as e:
+                        QMessageBox.critical(self, "Ошибка", f"Не удалось обновить запись: {str(e)}")
 
     def closeEvent(self, event):
         self.conn.close()
@@ -164,6 +200,7 @@ class CoffeeApp(QMainWindow, Ui_MainWindow):
 
 def main():
     app = QApplication(sys.argv)
+    app.setApplicationName("Кофейный магазин")
     window = CoffeeApp()
     window.show()
     sys.exit(app.exec())
